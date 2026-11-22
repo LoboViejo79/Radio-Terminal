@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LoboViejo79 Radio 2.2 — favoritas, listas y reconocimiento de canciones."""
+"""LoboViejo79 Radio 2.3 — favoritas, listas y reconocimiento de canciones."""
 import csv
 import curses
 import gzip
@@ -22,6 +22,7 @@ from collections import Counter
 from pathlib import Path
 from library import Library, DEFAULT_LIST, STATE_DIR, station_record, valid_stream
 from nowplaying import normalize_metadata, get_mpv_metadata, recognition_provider, recognize_stream
+from recording import Recorder, recording_directory
 
 BASE = Path(__file__).resolve().parent
 API_HOSTS = ('de1.api.radio-browser.info', 'nl1.api.radio-browser.info', 'at1.api.radio-browser.info')
@@ -51,7 +52,7 @@ def radio_api(path, timeout=5):
     for host in API_HOSTS:
         try:
             req = urllib.request.Request('https://' + host + path,
-                                         headers={'User-Agent': 'LoboViejo79Radio/2.2 (desktop terminal player)'})
+                                         headers={'User-Agent': 'LoboViejo79Radio/2.3 (desktop terminal player)'})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.load(resp)
         except (OSError, ValueError):
@@ -74,13 +75,14 @@ class Player:
         self.now_playing = ''
         self.track_source = ''
         self.last_metadata_check = 0.0
+        self.recorder = Recorder()
         self.cava_conf = Path(self.tmp.name) / 'cava.conf'
         self.cava_conf.write_text('[general]\n' 'bars = 32\n' 'framerate = 20\n'
                                   '[input]\n' 'method = pulse\n' 'source = auto\n'
                                   '[output]\n' 'method = raw\n' 'raw_target = /dev/stdout\n'
                                   'data_format = ascii\n' 'ascii_max_range = 12\n', encoding='utf-8')
     def play(self, st):
-        self.stop()
+        recording_notice = self.stop()
         self.current = st
         self.error = ''
         self.paused = False
@@ -102,6 +104,7 @@ class Player:
         except (OSError, RuntimeError) as exc:
             self.error = str(exc)
         self.start_cava()
+        return recording_notice
     def command(self, cmd):
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sk:
@@ -159,6 +162,7 @@ class Player:
                 if nums: self.bars = nums[:64]; self.last_bars = time.monotonic()
         except (OSError, ValueError): pass
     def stop(self):
+        recording_notice = self.recorder.stop()
         if self.proc:
             self.proc.terminate()
             try: self.proc.wait(timeout=.5)
@@ -170,6 +174,7 @@ class Player:
         self.track_source = ''
         try: Path(self.sock).unlink(missing_ok=True)
         except OSError: pass
+        return recording_notice
     def close(self):
         self.stop()
         if self.cava:
@@ -294,6 +299,17 @@ class App:
             return None
         return self.items[self.sel]
 
+    def toggle_recording(self):
+        """R inicia/detiene la grabación de la radio que SUENA, no la resaltada."""
+        if self.player.recorder.proc is not None:
+            self.msg = self.player.recorder.stop() or "Grabación detenida."
+            return
+        if not self.player.current:
+            self.msg = "Primero reproducí una emisora; después pulsá R para grabar."
+            return
+        ok, notice = self.player.recorder.start(self.player.current)
+        self.msg = notice
+
     def enter(self):
         if not self.items:
             self.msg = 'No hay elementos para seleccionar.'
@@ -305,8 +321,8 @@ class App:
         elif self.mode == 'playlists':
             self.switch('favorites' if item == DEFAULT_LIST else 'playlist', item)
         else:
-            self.player.play(item)
-            self.msg = 'Conectando: ' + item['name']
+            previous_recording = self.player.play(item)
+            self.msg = (previous_recording + " | " if previous_recording else "") + "Conectando: " + item["name"]
 
     def toggle_fav(self):
         selected = self.selected_station()
@@ -601,6 +617,8 @@ class App:
             'M: agregar radio propia por URL     E: exportar M3U8',
             'B: países  G: todas las radios  /: buscar  U: actualizar país',
             'I: identificar audio (SongRec o AudD) | canción ICY automática',
+            'R: ● REC empezar / ■ detener grabación de la emisora actual',
+            'Grabaciones: ~/Grabaciones/LoboViejo79-Radio/ (.mka)',
             'Enter: abrir / escuchar     Espacio: pausar',
             '+ -: volumen    S: detener    Q: salir',
             'Esc / Retroceso: volver   ?: mostrar esta ayuda',
@@ -659,7 +677,7 @@ class App:
             self.put(0, 0, 'Ampliá la terminal (mínimo 58×20)')
             self.scr.refresh()
             return
-        self.put(0, 1, '◉ LOBOVIEJO79 RADIO 2.2  |  TERMINAL EDITION', curses.A_BOLD | curses.color_pair(1))
+        self.put(0, 1, '◉ LOBOVIEJO79 RADIO 2.3  |  TERMINAL EDITION', curses.A_BOLD | curses.color_pair(1))
         self.put(1, 2, f'♥ {len(self.library.stations()):,} favoritas    ' +
                  f'♫ {len(self.library.names())} listas    {len(self.all):,} emisoras / {len(self.codes)} grupos  |  YouTube @LoboViejo79'.replace(',', '.'), curses.color_pair(2))
         titles = {
@@ -723,8 +741,14 @@ class App:
                 band = min(4, max(0, val - 4 * (2 - row)))
                 symbol = (' ', '▂', '▄', '▆', '█')[band]
                 self.put(bottom + 4 + row, 2 + i * 2, symbol, curses.color_pair(3 if row == 0 else 1))
+        if self.player.recorder.active:
+            rec = self.player.recorder
+            self.put(bottom + 7, 2, short(f'● REC  {rec.elapsed_label}  │  {rec.path.name}  │ R detener', w - 5),
+                     curses.A_BOLD | curses.color_pair(5))
+        else:
+            self.put(bottom + 7, 2, '⏺ R grabar emisora actual', curses.A_DIM)
         self.put(h - 3, 2, short(self.player.error or self.msg, w - 5), curses.A_DIM)
-        self.put(h - 2, 2, short('F ♥ favoritas  A ♥ guardar  I identificar  L listas  N nueva  M URL  E exportar  ? ayuda', w - 5),
+        self.put(h - 2, 2, short('● R grabar  F ♥ favoritas  A ♥ guardar  I identificar  L listas  N nueva  M URL  ? ayuda', w - 5),
                  curses.A_BOLD)
         self.put(h - 1, 2, short('↑↓ elegir  Enter escuchar  / buscar  B países  G todas  [ ] ordenar  +/- volumen  Q salir', w - 5),
                  curses.A_DIM)
@@ -738,6 +762,7 @@ class App:
         curses.init_pair(2, curses.COLOR_WHITE, -1)
         curses.init_pair(3, curses.COLOR_GREEN, -1)
         curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_CYAN)
+        curses.init_pair(5, curses.COLOR_RED, -1)
         self.scr.keypad(True)
         self.scr.timeout(70)
         try:
@@ -746,6 +771,9 @@ class App:
                 if new_title:
                     self.remember_track(new_title, 'ICY', self.player.current)
                 self.poll_recognition()
+                recording_event = self.player.recorder.poll()
+                if recording_event:
+                    self.msg = recording_event
                 self.render()
                 k = self.scr.getch()
                 if k == -1:
@@ -797,7 +825,7 @@ class App:
                 elif k in (ord('?'), ord('h'), ord('H')):
                     self.help()
                 elif k in (ord('r'), ord('R')):
-                    self.refresh()
+                    self.toggle_recording()
                 elif k in (curses.KEY_BACKSPACE, 127, 27):
                     self.back()
                 elif k == ord(' '):
@@ -807,7 +835,8 @@ class App:
                 elif k == ord('-'):
                     self.player.change_vol(-5)
                 elif k in (ord('s'), ord('S')):
-                    self.player.stop()
+                    recording_notice = self.player.stop()
+                    self.msg = (recording_notice + " | " if recording_notice else "") + "Reproducción detenida."
                 elif k in (ord('i'), ord('I')):
                     self.identify_current()
         finally:

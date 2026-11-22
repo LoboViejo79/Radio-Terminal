@@ -2,9 +2,9 @@
 
 # 📻 LoboViejo79 Radio
 
-### 🎧 Terminal Edition v2.2 · Escuchá radios del mundo directamente desde Linux
+### 🎧 Terminal Edition v2.3 · Escuchá radios del mundo directamente desde Linux
 
-**Una aplicación portátil de terminal, con emisoras por país, favoritas, listas personales, visualizador de audio e identificación de canciones.**
+**Una aplicación portátil de terminal, con emisoras por país, favoritas, listas personales, visualizador de audio, grabación de emisoras e identificación de canciones.**
 
 [![Linux](https://img.shields.io/badge/OS-Linux-1793D1?logo=linux&logoColor=white)](https://kernel.org/)
 [![Python](https://img.shields.io/badge/Python-3.x-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -16,7 +16,7 @@
 
 ![Vista del reproductor LoboViejo79 Radio en terminal](assets/captura-terminal.png)
 
-*Vista de la interfaz de terminal. Los títulos que aparecen dependen de los metadatos transmitidos por la emisora.*
+*Captura aportada durante el desarrollo (versión anterior). En v2.3, la interfaz lleva la marca LoboViejo79 y muestra el indicador rojo `● REC` al grabar una emisora.*
 
 </div>
 
@@ -41,6 +41,7 @@
 - 🔗 **Radios por URL:** agregá una emisora no incluida en el catálogo.
 - 📤 **Exportación M3U8:** reproducí tus favoritas en otros programas o incorporalas a Jellyfin.
 - 🎛️ **Control de reproducción:** iniciar, pausar, detener y ajustar volumen sin salir de la terminal.
+- 🔴 **Grabar emisoras:** tecla `R`, indicador `● REC` rojo, cronómetro y guardado automático de audio en `.mka` con `ffmpeg` (sin recodificar).
 - 📈 **Barras de sonido:** visualizador de audio basado en `cava`.
 - 🎶 **Nombre del tema en reproducción:** lectura automática de metadatos ICY cuando la radio los proporciona.
 - 🎤 **Identificación por audio opcional:** presioná `I` para intentar reconocer una canción usando SongRec o AudD.
@@ -59,7 +60,7 @@
 bash radio.sh
 ```
 
-El lanzador comprueba `python3`, `mpv` y `cava`. Si falta algo, **solicita autorización antes de instalar** dependencias del sistema mediante `dnf`, `apt-get` o `pacman`; no necesita `pip` ni Gum. Para impedir cualquier intento de instalación:
+El lanzador comprueba `python3`, `mpv`, `cava` y `ffmpeg`. Si falta algo, **solicita autorización antes de instalar** dependencias del sistema mediante `dnf`, `apt-get` o `pacman`; no necesita `pip` ni Gum. Para impedir cualquier intento de instalación:
 
 ```bash
 LOBOVIEJO79_NO_INSTALL=1 bash radio.sh
@@ -69,9 +70,9 @@ Si preferís instalar las dependencias vos mismo:
 
 | Distribución | Comando |
 |:--|:--|
-| 🟦 Fedora | `sudo dnf install python3 mpv cava` |
-| 🌀 Debian | `sudo apt update && sudo apt install python3 mpv cava` |
-| 🏹 Arch / CachyOS | `sudo pacman -S --needed python mpv cava` |
+| 🟦 Fedora | `sudo dnf install python3 mpv cava ffmpeg-free` |
+| 🌀 Debian | `sudo apt update && sudo apt install python3 mpv cava ffmpeg` |
+| 🏹 Arch / CachyOS | `sudo pacman -S --needed python mpv cava ffmpeg` |
 
 > 🛠️ En Arch, el ejecutable `python3` viene con el paquete `python`; si el lanzador no lo encuentra, instalá ese paquete manualmente. Necesitás una terminal UTF-8 (preferentemente de al menos 100 × 30 caracteres) y una salida de audio configurada.
 
@@ -89,7 +90,7 @@ Si preferís instalar las dependencias vos mismo:
 | `G` | 🌐 Ver todas las emisoras |
 | `/` | 🔎 Buscar o filtrar en la vista actual |
 | `U` | 🔄 Actualizar emisoras del país actual desde Radio Browser (sesión actual) |
-| `R` | 🔃 Refrescar la vista |
+| `R` | 🔴 Iniciar/detener **grabación** de la emisora que suena (indicador `● REC`) |
 | `Esc` / `Retroceso` | Volver a la pantalla anterior |
 | `?` / `H` | ❔ Mostrar ayuda en pantalla |
 | `Q` | 🚪 Salir |
@@ -118,6 +119,7 @@ Si preferís instalar las dependencias vos mismo:
 | `+` / `-` | 🔉 Subir o bajar volumen |
 | `S` | ⏹️ Detener reproducción |
 | `I` | 🎶 Identificar la canción mediante análisis de audio, si está configurado |
+| `R` | ⏺️ Iniciar o ⏹️ detener grabación; muestra `● REC` y duración |
 
 ## ❤️ Cómo crear tu lista de favoritas
 
@@ -128,6 +130,44 @@ Si preferís instalar las dependencias vos mismo:
 5. Para organizarla, usá `[` y `]`, o `A` para quitarla.
 
 Las favoritas se guardan automáticamente. Para organizar por temática, podés crear listas como **Rock**, **Noticias**, **Folklore** o **Deportes** con `N` y sumar emisoras con `P`.
+
+## 🔴 Grabar una radio desde la terminal (v2.3)
+
+La grabación es **manual**: nunca se inicia sola ni captura el micrófono. Usa `ffmpeg` para abrir **otra conexión al streaming** de la emisora que está sonando y guardar su audio original sin recomprimir. Podés seguir escuchando mientras grabás.
+
+1. Seleccioná una emisora con `↑` / `↓` y presioná `Enter` para escucharla.
+2. Presioná **`R`** para comenzar a grabar. El programa crea automáticamente la carpeta de grabaciones y muestra un indicador rojo **`● REC`**, el tiempo transcurrido `HH:MM:SS` y el archivo.
+3. Presioná **`R`** de nuevo para terminar. `ffmpeg` cierra el archivo `.mka` y el programa muestra la ruta y el tamaño del archivo guardado.
+4. También se detiene la grabación al pulsar **`S`**, cambiar de emisora o salir con **`Q`**. **Pausar la reproducción con Espacio no pausa la grabación**, porque se obtiene directamente de la transmisión.
+
+**Ejemplo de la interfaz mientras está grabando:**
+
+```text
+◉ LOBOVIEJO79 RADIO 2.3  |  TERMINAL EDITION
+▶ EN VIVO  •  Rock And Pop FM 95.9
+♪ SUENA: David Bowie — The Jean Genie [ICY]
+VOLUMEN 45%  ▓▓▓▓▓▓▓▓▓░░░░░░░░░░░
+▂  ▆ ▂ ▆ █ ▄ ▂ ▆ █ ▄ ▃ ▂ █ ▆ ▂    (barras de sonido)
+● REC  00:12:34  │ Rock_And_Pop_FM_95_9_2026-11-22_...
+R detener grabación
+```
+
+**Ubicación predeterminada de los archivos:**
+
+```text
+~/Grabaciones/LoboViejo79-Radio/
+└── Nombre_de_la_Emisora_2026-11-22_01-30-00_123456.mka
+```
+
+El formato **Matroska Audio (`.mka`)** suele funcionar con `mpv`, VLC y Jellyfin y puede contener MP3, AAC u otros códecs sin pérdida adicional de calidad por recodificación. Se eligió para no depender de un codificador específico. **No es lo mismo que MP3**: si necesitás `.mp3`, se puede convertir después según el códec disponible. Cada grabación es un archivo distinto, con fecha y hora en su nombre.
+
+Si querés guardar las grabaciones en otro disco o directorio:
+
+```bash
+LOBOVIEJO79_RECORD_DIR="$HOME/Música/Grabaciones-Radio" bash radio.sh
+```
+
+📌 **Consideraciones:** `ffmpeg` necesita conectarse a Internet y que la URL admita el audio. Algunas emisoras bloquean conexiones adicionales o cambian sus streams; pueden fallar incluso si la reproducción funciona. El visualizador `cava` muestra el sonido del sistema, pero la **grabación toma solo el stream de radio**, no otros sonidos de la computadora. Grabá únicamente contenidos cuya conservación o reutilización esté permitida.
 
 ## 🎵 ¿Qué canción está sonando?
 
@@ -171,9 +211,10 @@ Los siguientes comandos pueden ejecutarse sin abrir la interfaz (varios solo req
 | Comando | Para qué sirve |
 |:--|:--|
 | `bash radio.sh` | ▶️ Abrir reproductor |
-| `bash radio.sh --check` | 🩺 Comprobar dependencias `python3`, `mpv`, `cava` (sin instalar) |
+| `bash radio.sh --check` | 🩺 Comprobar dependencias `python3`, `mpv`, `cava` y `ffmpeg` (sin instalar) |
 | `bash radio.sh --self-test` | 🔍 Comprobar catálogo local y biblioteca |
 | `bash radio.sh --check-recognition` | 🎼 Verificar SongRec o AudD + `ffmpeg` |
+| `LOBOVIEJO79_RECORD_DIR="$HOME/Grabaciones" bash radio.sh` | 🔴 Cambiar carpeta de grabación |
 | `bash radio.sh --list-favorites` | ❤️ Listar favoritas guardadas |
 | `bash radio.sh --export-favorites` | 📤 Exportar favoritas a M3U8 en el directorio de exportaciones |
 | `bash radio.sh --export-favorites "$HOME/favoritas.m3u8"` | 📁 Exportar a una ruta elegida |
@@ -184,7 +225,7 @@ Los siguientes comandos pueden ejecutarse sin abrir la interfaz (varios solo req
 ## 📂 Archivos del proyecto
 
 ```text
-loboviejo79-radio-2.2/
+loboviejo79-radio-2.3/
 ├── 📄 README.md                   # Presentación e instrucciones
 ├── 📸 assets/
 │   └── captura-terminal.png       # Captura para GitHub
@@ -192,6 +233,7 @@ loboviejo79-radio-2.2/
 ├── 🐍 radio.py                     # Interfaz TUI y reproducción
 ├── 🗂️ library.py                   # Favoritas y listas
 ├── 🎶 nowplaying.py               # Metadatos y reconocimiento
+├── 🔴 recording.py                # Gestión y finalización de grabaciones
 ├── 🌎 catalog.csv.gz              # 63.396 emisoras incluidas
 ├── 🧪 tests/                     # Pruebas automatizadas
 └── .gitignore
@@ -205,6 +247,8 @@ La app utiliza `~/.local/state/loboviejo79-radio/` (o `$XDG_STATE_HOME/loboviejo
 - `historial_canciones.jsonl`: historial de títulos detectados.
 - `exportaciones/`: listas M3U8 exportadas.
 
+Las **grabaciones** no van a la carpeta de estado; se almacenan por defecto en `~/Grabaciones/LoboViejo79-Radio/` o en `$LOBOVIEJO79_RECORD_DIR` si lo definís.
+
 **Migración:** al iniciarse por primera vez, si encuentra datos de la versión anterior y el nuevo directorio todavía no existe, copia las favoritas, listas e historial sin borrar los originales. No sobrescribe una biblioteca ya existente. Para respaldar tus datos, copiá esa carpeta a otro disco.
 
 ### 📺 Usar favoritas en Jellyfin
@@ -217,22 +261,22 @@ Copiá el archivo al servidor donde está Jellyfin y configurá **TV en directo 
 
 ## 🧪 Pruebas y limitaciones
 
-El proyecto incluye pruebas automáticas para carga de catálogo, gestión de listas/favoritas, migración de datos, metadatos y respuestas simuladas de reconocimiento. Para ejecutarlas:
+El proyecto incluye pruebas automáticas para carga de catálogo, gestión de listas/favoritas, migración de datos, metadatos, grabación y respuestas simuladas de reconocimiento. Para ejecutarlas:
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-✅ Verificado: lectura del catálogo y pruebas automatizadas de software.  
-⚠️ No se verificó la reproducción de cada radio, ni el reconocimiento real con los servidores de SongRec/AudD en esta entrega.  
+✅ Verificado: lectura del catálogo, **24 pruebas automatizadas**, grabación real de una señal MP3 servida por un servidor HTTP local y reproducción del archivo resultante verificada con `ffprobe`.  
+⚠️ No se verificó la reproducción ni la grabación de cada radio remota; tampoco el reconocimiento real con SongRec/AudD. Para grabar una emisora concreta, hay que probar su URL y las condiciones de su servidor.  
 📈 Las barras `cava` visualizan el monitor de audio PulseAudio/PipeWire del sistema, por lo que pueden reflejar otros sonidos además de la radio.
 
 ## 🚀 Publicar este proyecto en GitHub
 
-1. Descomprimí `LoboViejo79_Radio_Terminal_v2.2_GitHub.zip`.
+1. Descomprimí `LoboViejo79_Radio_Terminal_v2.3_Grabacion_GitHub.zip`.
 2. Creá un repositorio vacío en GitHub (por ejemplo, `loboviejo79-radio`).
 3. En GitHub elegí **Add file → Upload files**.
-4. Subí **los archivos y las carpetas que están dentro de `loboviejo79-radio-2.2/`**, incluido `assets/captura-terminal.png` y `catalog.csv.gz`.
+4. Subí **los archivos y las carpetas que están dentro de `loboviejo79-radio-2.3/`**, incluido `assets/captura-terminal.png` y `catalog.csv.gz`.
 5. Guardá los cambios. GitHub mostrará este README y su captura en la página principal.
 
 **Importante:** subir el ZIP como un único archivo adjunto no publica el código de forma navegable; hay que extraerlo primero. No se incluye una licencia de uso explícita: elegí una (por ejemplo desde GitHub) si querés permitir la reutilización del proyecto por terceros.
@@ -242,6 +286,7 @@ python3 -m unittest discover -s tests -v
 - 📻 [Radio Browser](https://www.radio-browser.info/) · [API](https://docs.radio-browser.info/)
 - 🧰 [mpv](https://mpv.io/manual/stable/)
 - 📈 [cava](https://github.com/karlstav/cava)
+- 🔴 [FFmpeg: guardar transmisiones y copiar streams](https://ffmpeg.org/ffmpeg.html)
 - 🎶 [SongRec](https://github.com/marin-m/SongRec) · [AudD](https://docs.audd.io/)
 - 🎨 [Charm Gum](https://github.com/charmbracelet/gum) — inspiración de interfaz; **no es una dependencia**.
 
